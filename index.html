@@ -7,7 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Inter', sans-serif; overscroll-behavior: none; }
-        #chat-display { scroll-behavior: smooth; height: calc(100dvh - 180px); }
+        /* 채팅창 높이 조절: 토큰창과 입력창 공간 확보 */
+        #chat-display { scroll-behavior: smooth; height: calc(100dvh - 220px); }
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
     </style>
 </head>
@@ -21,19 +22,19 @@
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-blue-300 mb-1">캐릭터 페르소나</label>
-                    <textarea id="char-persona" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="리버 워드: 무뚝뚝한 형사..."></textarea>
+                    <textarea id="char-persona" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="리버 워드 등..."></textarea>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-green-300 mb-1">유저 페르소나 (나)</label>
-                    <textarea id="user-persona" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500" placeholder="V: 나이트 시티의 용병..."></textarea>
+                    <textarea id="user-persona" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500" placeholder="V 등..."></textarea>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-cyan-300 mb-1">세계관</label>
-                    <textarea id="worldview" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="2077년 사이버펑크 도시..."></textarea>
+                    <textarea id="worldview" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="나이트 시티 등..."></textarea>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-yellow-300 mb-1">장기 기억</label>
-                    <textarea id="memory" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="우리는 저번 사건에서..."></textarea>
+                    <textarea id="memory" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="과거 사건들..."></textarea>
                 </div>
             </div>
         </aside>
@@ -41,15 +42,24 @@
         <main class="flex-1 flex flex-col relative">
             <div id="chat-display" class="flex-1 p-4 overflow-y-auto space-y-4">
                 <div class="bg-gray-800 p-3 rounded-lg max-w-xs text-blue-300">
-                    엔진과 UI가 모두 동기화됐어. 대화를 시작해봐, y!
+                    리버 형사가 기다리고 있어, y.
                 </div>
             </div>
 
-            <div id="loading" class="hidden absolute bottom-24 left-1/2 -translate-x-1/2 bg-gray-800 px-4 py-2 rounded-full border border-blue-500 shadow-lg">
+            <div id="loading" class="hidden absolute bottom-32 left-1/2 -translate-x-1/2 bg-gray-800 px-4 py-2 rounded-full border border-blue-500 shadow-lg z-10">
                 <span class="text-sm text-blue-400 animate-pulse">DeepSeek 추론 및 Claude 집필 중...</span>
             </div>
 
-            <form id="chat-form" class="p-4 bg-gray-800 safe-area-bottom">
+            <div id="token-info-area" class="hidden px-4 py-2 bg-gray-800 border-t border-gray-700 text-[10px] font-mono text-gray-400">
+                대화를 시작하면 토큰 정보가 여기에 표시됩니다.
+            </div>
+
+            <form id="chat-form" class="p-4 bg-gray-800 safe-area-bottom border-t border-gray-700">
+                <div class="flex items-center justify-between mb-2">
+                    <button id="btn-toggle-tokens" type="button" class="text-[10px] text-gray-500 hover:text-blue-400 border border-gray-600 px-2 py-0.5 rounded transition">
+                        토큰 확인하기
+                    </button>
+                </div>
                 <div class="flex space-x-2">
                     <textarea id="chat-input" rows="1" class="flex-1 bg-gray-700 border-none rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="메시지를 입력해..."></textarea>
                     <button type="submit" class="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-bold transition">전송</button>
@@ -63,11 +73,35 @@
         const chatForm = document.getElementById('chat-form');
         const chatInput = document.getElementById('chat-input');
         const loading = document.getElementById('loading');
+        const tokenInfoArea = document.getElementById('token-info-area');
+        const btnToggleTokens = document.getElementById('btn-toggle-tokens');
         
         let chatHistory = [];
+        let lastTokenData = null; // 마지막 토큰 정보 저장용
 
-        // 서버 주소 (노트북 IP나 localhost)
         const SERVER_URL = "http://localhost:8000/chat";
+
+        // 토큰 창 열고 닫기 로직
+        btnToggleTokens.addEventListener('click', () => {
+            if (tokenInfoArea.classList.contains('hidden')) {
+                tokenInfoArea.classList.remove('hidden');
+                btnToggleTokens.innerText = "토큰 숨기기";
+                updateTokenDisplay();
+            } else {
+                tokenInfoArea.classList.add('hidden');
+                btnToggleTokens.innerText = "토큰 확인하기";
+            }
+        });
+
+        function updateTokenDisplay() {
+            if (!lastTokenData) return;
+            const ds = lastTokenData.deepseek;
+            const cl = lastTokenData.claude;
+            tokenInfoArea.innerHTML = `
+                <div class="mb-1 text-blue-400">[DeepSeek] in:${ds.input}, out:${ds.output}, thoughts:${ds.thoughts}, cached:${ds.cached}, total:${ds.total}</div>
+                <div class="text-green-400">[Claude] in:${cl.input}, out:${cl.output}, total:${cl.total}</div>
+            `;
+        }
 
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -79,10 +113,9 @@
             loading.classList.remove('hidden');
 
             try {
-                // ✨ UI에서 모든 설정값 긁어오기
                 const settings = {
                     charPersona: document.getElementById('char-persona').value,
-                    userPersona: document.getElementById('user-persona').value, // 👈 추가됨!
+                    userPersona: document.getElementById('user-persona').value,
                     worldview: document.getElementById('worldview').value,
                     memory: document.getElementById('memory').value
                 };
@@ -100,6 +133,13 @@
                 const data = await response.json();
                 
                 displayMessage("model", data.reply);
+                
+                // 토큰 데이터 저장 및 업데이트
+                if (data.tokens) {
+                    lastTokenData = data.tokens;
+                    if (!tokenInfoArea.classList.contains('hidden')) updateTokenDisplay();
+                }
+
                 chatHistory.push({ role: "user", content: text });
                 chatHistory.push({ role: "model", content: data.reply });
 
