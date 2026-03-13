@@ -1209,87 +1209,53 @@
 
         /**
          * 6. API 호출 공통 함수 (기존과 동일)
-         */
-        async function callGeminiApi(contents, systemInstructionText, apiKey) {
-            // (이 함수 내용은 변경 없음 - 기존과 동일)
-            if (!apiKey) {
-                throw new Error("API key is missing.");
-            }
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-            const safetyThreshold = "BLOCK_NONE";
-            const safetySettings = [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: safetyThreshold },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: safetyThreshold },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: safetyThreshold },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: safetyThreshold },
-            ];
-            const apiSafeContents = contents.map(msg => ({
-                role: msg.role,
-                parts: msg.parts
-            }));
-            if (systemInstructionText) {
-                apiSafeContents.unshift(
-                    { role: "user", parts: [{ text: systemInstructionText }] },
-                    { role: "model", parts: [{ text: "알겠습니다. 설정된 페르소나와 지침에 따라 응답하겠습니다." }] }
-                );
-            }
-            const payload = {
-                contents: apiSafeContents,
-                safetySettings: safetySettings,
-                // ✨ 답변 길이를 늘려주는 설정 추가 ✨
-                generationConfig: {
-                    maxOutputTokens: 4096,  // 답변 최대 길이 (넉넉하게 설정)
-                    temperature: 0.8,       // 창의성 (1.0이면 감성적이고 말을 더 많이 함)
-                    topP: 0.95
-                }
-            };
-            const response = await fetchWithRetry(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                     throw new Error(`API key not valid or unauthorized (status: ${response.status})`);
-                }
-                if (response.status === 400) {
-                     throw new Error(`Server error: 400 (Bad Request). API 키는 맞지만 요청 내용(JSON 형식 등)을 서버가 거부했습니다.`);
-                }
-                throw new Error(`API error! status: ${response.status}`);
-            }
-            const result = await response.json();
-            if (result.promptFeedback) {
-                console.error("Prompt Feedback:", result.promptFeedback);
-                const blockReason = result.promptFeedback.blockReason || '알 수 없는 이유';
-                throw new Error(`입력이 차단되었습니다. (이유: ${blockReason})`);
-            }
-            const candidate = result.candidates?.[0];
-            if (candidate) {
-                if (candidate.finishReason === 'STOP' || candidate.finishReason === 'MAX_TOKENS') {
-                    if (candidate.content && 
-                        candidate.content.parts && 
-                        candidate.content.parts.length > 0 &&
-                        candidate.content.parts[0].text != null 
-                    ) {
-                        if (candidate.finishReason === 'MAX_TOKENS') {
-                             console.warn("API finishReason: MAX_TOKENS. 응답이 잘렸을 수 있습니다.");
-                        }
-                        return candidate.content.parts[0].text;
-                    } else {
-                        return ""; 
-                    }
-                } else {
-                    throw new Error(`API가 정상 종료되지 않았습니다. (이유: ${candidate.finishReason || '알 수 없음'})`);
-                }
-            } else {
-                 if (result.promptFeedback) {
-                    const blockReason = result.promptFeedback.blockReason || '알 수 없음';
-                     throw new Error(`입력이 차단되었습니다. (이유: ${blockReason})`);
-                }
-                throw new Error("API로부터 유효한 응답(candidates)을 받지 못했습니다.");
-            }
-        }
+         */// ⚠️ 중요: 아이폰에서 접속할 때는 'localhost' 대신 네 노트북의 실제 IP를 적어야 해!
+    // 일단 노트북에서 테스트할 거면 "http://localhost:8000/chat"으로 해봐.
+       async function handleSendChat(event) {
+    event.preventDefault();
+    const prompt = chatInput.value.trim();
+    if (!prompt) return;
 
+    // 1. 설정값들 싹 긁어모으기
+    const settings = {
+        charPersona: charPersonaInput.value,
+        userPersona: userPersonaInput.value,
+        worldview: worldviewInput.value,
+        memory: memoryInput.value
+    };
+
+    // 2. 화면에 내 메시지 표시 및 기록 저장
+    const userMessageId = Date.now() + '-user';
+    displayMessage(prompt, 'user', userMessageId);
+    chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+    
+    chatInput.value = "";
+    loadingIndicator.classList.remove('hidden');
+
+    try {
+        // 3. 내 노트북 서버(하이브리드 엔진) 호출!
+        const response = await fetch("http://localhost:8000/chat", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: prompt,
+                history: chatHistory.map(m => ({ role: m.role, content: m.parts[0].text })),
+                settings: settings // 설정값 전송
+            })
+        });
+
+        const data = await response.json();
+        const modelMessageId = Date.now() + '-model';
+        displayMessage(data.reply, 'model', modelMessageId);
+        chatHistory.push({ role: "model", parts: [{ text: data.reply }] });
+        saveChatHistory();
+        
+    } catch (error) {
+        displayMessage(`엔진 오류: ${error.message}`, 'error');
+    } finally {
+        loadingIndicator.classList.add('hidden');
+    }
+}
 
         /**
          * 7. 시스템 프롬프트 생성 (기존과 동일, 길이 제한 없음)
@@ -1436,6 +1402,7 @@ ${memory || "설정 없음"}
     </script>
 </body>
 </html>
+
 
 
 
