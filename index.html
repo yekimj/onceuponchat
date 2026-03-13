@@ -20,16 +20,20 @@
             
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">캐릭터 페르소나</label>
-                    <textarea id="char-persona" rows="5" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="모차르트 등..."></textarea>
+                    <label class="block text-sm font-medium text-blue-300 mb-1">캐릭터 페르소나</label>
+                    <textarea id="char-persona" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="리버 워드: 무뚝뚝한 형사..."></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">세계관</label>
-                    <textarea id="worldview" rows="5" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="사이버펑크 등..."></textarea>
+                    <label class="block text-sm font-medium text-green-300 mb-1">유저 페르소나 (나)</label>
+                    <textarea id="user-persona" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500" placeholder="V: 나이트 시티의 용병..."></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">장기 기억</label>
-                    <textarea id="memory" rows="5" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="과거 사건들..."></textarea>
+                    <label class="block text-sm font-medium text-cyan-300 mb-1">세계관</label>
+                    <textarea id="worldview" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="2077년 사이버펑크 도시..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-yellow-300 mb-1">장기 기억</label>
+                    <textarea id="memory" rows="4" class="w-full bg-gray-700 border-none rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="우리는 저번 사건에서..."></textarea>
                 </div>
             </div>
         </aside>
@@ -37,7 +41,7 @@
         <main class="flex-1 flex flex-col relative">
             <div id="chat-display" class="flex-1 p-4 overflow-y-auto space-y-4">
                 <div class="bg-gray-800 p-3 rounded-lg max-w-xs text-blue-300">
-                    엔진이 교체되었습니다. 대화를 시작해봐, y!
+                    엔진과 UI가 모두 동기화됐어. 대화를 시작해봐, y!
                 </div>
             </div>
 
@@ -60,7 +64,7 @@
         const chatInput = document.getElementById('chat-input');
         const loading = document.getElementById('loading');
         
-        let chatHistory = []; // {role: "user" | "model", content: "..."}
+        let chatHistory = [];
 
         // 서버 주소 (노트북 IP나 localhost)
         const SERVER_URL = "http://localhost:8000/chat";
@@ -70,15 +74,15 @@
             const text = chatInput.value.trim();
             if (!text || !loading.classList.contains('hidden')) return;
 
-            // 1. 유저 메시지 화면 표시
             displayMessage("user", text);
             chatInput.value = "";
             loading.classList.remove('hidden');
 
-            // 2. 백엔드 서버 호출
             try {
+                // ✨ UI에서 모든 설정값 긁어오기
                 const settings = {
                     charPersona: document.getElementById('char-persona').value,
+                    userPersona: document.getElementById('user-persona').value, // 👈 추가됨!
                     worldview: document.getElementById('worldview').value,
                     memory: document.getElementById('memory').value
                 };
@@ -95,7 +99,6 @@
 
                 const data = await response.json();
                 
-                // 3. AI 메시지 화면 표시 및 히스토리 저장
                 displayMessage("model", data.reply);
                 chatHistory.push({ role: "user", content: text });
                 chatHistory.push({ role: "model", content: data.reply });
